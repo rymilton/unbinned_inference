@@ -1,0 +1,9 @@
+clustered_pythia_files/*
+H1Unfold/*
+plots/*
+pythia_files/*
+pythia_h5/*
+test_h5.py
+plot_utils.py
+./pythia_generation/cluster_centauro
+./pythia_generation/pythia_H1
