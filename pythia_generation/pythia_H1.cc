@@ -18,16 +18,48 @@ using namespace LHAPDF;
 
 //==========================================================================
 
-int main() {
+int main(int argc, char* argv[]) {
+
+  // Parse alpha_s from command line argument; default to 0.14 if not provided.
+  double alphaSvalue = 0.118;
+  if (argc >= 2) {
+    std::istringstream ss(argv[1]);
+    if (!(ss >> alphaSvalue)) {
+      std::cerr << "Error: invalid alpha_s value '" << argv[1] << "'" << std::endl;
+      return 1;
+    }
+  }
+
+  // Parse nEvent from command line argument; default to 10000000 if not provided.
+  int nEvent = 10000000;
+  if (argc >= 3) {
+    std::istringstream ss(argv[2]);
+    if (!(ss >> nEvent) || nEvent <= 0) {
+      std::cerr << "Error: invalid nEvent value '" << argv[2] << "'" << std::endl;
+      return 1;
+    }
+  }
+  // Parse lepton_id from command line argument; default to -11 (positron) if not provided.
+  int lepton_id = -11;
+  if (argc >= 4) {
+    std::istringstream ss(argv[3]);
+    if (!(ss >> lepton_id) || (lepton_id != 11 && lepton_id != -11)) {
+      std::cerr << "Error: invalid lepton_id value '" << argv[3] << "' (must be 11 or -11)" << std::endl;
+      return 1;
+    }
+  }
+  const char* lepton_str = (lepton_id == -11) ? "eplus" : "eminus";
+
+  std::cout << "Running with alpha_s = " << alphaSvalue
+            << ", nEvent = " << nEvent
+            << ", lepton_id = " << lepton_id << std::endl;
 
   // Beam energies, minimal Q2, number of events to generate.
   double eProton   = 920.;
   double eElectron = 27.6;
   double Q2min     = 150.;
-  int    nEvent    = 10000000;
   const double ymin = 0.2;
   const double ymax = 0.7;
-  const int lepton_id = -11; // -11 is positron, 11 is electron
 
   // Generator. Shorthand for event.
   Pythia pythia;
@@ -67,12 +99,12 @@ int main() {
   pythia.readString("PDF:pSet = LHAPDF6:NNPDF31_nnlo_as_0118");
   pythia.readString("PDF:pHardSet = LHAPDF6:NNPDF31_nnlo_as_0118"); // Defaults to whatever pSet is set to, but explicitly set here for clarity.
   pythia.readString("PDF:useHard  = off");  // This is the default, but explicitly set here for clarity.
-  pythia.readString("SigmaProcess:alphaSvalue = 0.14");
-  pythia.readString("SigmaProcess:alphaSorder = 1"); // This is the default, but explicitly set here for clarity.
-  pythia.readString("TimeShower:alphaSvalue = 0.14");
-  pythia.readString("TimeShower:alphaSorder = 1"); // This is the default, but explicitly set here for clarity.
-  pythia.readString("SpaceShower:alphaSvalue = 0.14");
-  pythia.readString("SpaceShower:alphaSorder = 1"); // This is the default, but explicitly set here for clarity.
+  pythia.settings.parm("SigmaProcess:alphaSvalue", alphaSvalue);
+  pythia.readString("SigmaProcess:alphaSorder = 1");
+  pythia.settings.parm("TimeShower:alphaSvalue", alphaSvalue);
+  pythia.readString("TimeShower:alphaSorder = 1");
+  pythia.settings.parm("SpaceShower:alphaSvalue", alphaSvalue);
+  pythia.readString("SpaceShower:alphaSorder = 1");
 
   // hadron-level on/off. By default this is on and it seems like it should be on but Vinny has it turned off
   pythia.readString("HadronLevel:Hadronize = on"); 
@@ -90,7 +122,8 @@ int main() {
   if (!pythia.init()) return 1;
 
   // ROOT output file.
-  TFile* outFile = new TFile("/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS14_eplus_10mil.root", "RECREATE");
+  TString outPath = TString::Format("/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS%.4f_%s_%devents.root", alphaSvalue, lepton_str, nEvent);
+  TFile* outFile = new TFile(outPath, "RECREATE");
 
   // ROOT histograms.  
   // TTree for event-level data.
