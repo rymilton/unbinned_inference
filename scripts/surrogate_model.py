@@ -33,9 +33,11 @@ class SurrogateModel:
         self.lr_factor = 1.0
 
         self.num_steps_per_epoch = None
-        self.mc = None
+        self.data = None
+        self.reference = None
+        self.weights=None
 
-        self.weights_folder = "../weights"
+        self.weights_folder = "../weights" # TO-DO: MAKE THIS AN EDITABLE PATH
         if not os.path.exists(self.weights_folder):
             os.makedirs(self.weights_folder)
 
@@ -52,18 +54,18 @@ class SurrogateModel:
     def RunClassification(self):
         """Data versus reco MC reweighting"""
         if hvd.rank() == 0:
-            print("RUNNING STEP 1")
+            print("RUNNING CLASSIFICATION")
 
         self.RunModel(
             np.concatenate(
                 (
-                    self.labels_other,
+                    self.labels_data,
                     self.labels_reference,
                 )
             ),
             np.concatenate(
                 (
-                    self.other.weight,
+                    self.data.weight, # TO-DO: Should come up with a better name than this
                     self.reference.weight
                 )
             ),
@@ -72,13 +74,9 @@ class SurrogateModel:
             cached=False,  # after first training cache the training data
         )
 
-        # Don't update weights where there's no reco events
-        new_weights = np.ones_like(self.weights_pull)
-        new_weights[self.mc.pass_reco] = self.reweight(
-            self.mc.reco, self.model1_ema, batch_size=1000
-        )[self.mc.pass_reco]
-
-        self.weights_pull = self.weights_push * new_weights
+        self.weights = self.reweight(
+            self.data, self.model_ema, batch_size=1000
+        )
 
     def RunModel(
         self,
@@ -145,7 +143,7 @@ class SurrogateModel:
         del train_data, test_data
         gc.collect()
 
-    def cache(self, label, weights, stepn, cached, NTRAIN):
+    def cache(self, label, weights, cached, NTRAIN):
         if not cached:
             self.idx = np.arange(label.shape[0])
             np.random.shuffle(self.idx)
@@ -154,20 +152,20 @@ class SurrogateModel:
                 {
                     "inputs_particle": np.concatenate(
                         (
-                            self.mc.gen[0][self.mc.pass_gen],
-                            self.data.gen[0][self.data.pass_gen],
+                            self.data.gen[0],
+                            self.reference.gen[0],
                         )
                     )[self.idx],
                     "inputs_event": np.concatenate(
                         (
-                            self.mc.gen[1][self.mc.pass_gen],
-                            self.data.gen[1][self.data.pass_gen],
+                            self.data.gen[1],
+                            self.reference.gen[1],
                         )
                     )[self.idx],
                     "inputs_mask": np.concatenate(
                         (
-                            self.mc.gen[2][self.mc.pass_gen],
-                            self.data.gen[2][self.data.pass_gen],
+                            self.data.gen[2],
+                            self.reference.gen[2],
                         )
                     )[self.idx],
                 }
@@ -255,8 +253,8 @@ class SurrogateModel:
         self.model.compile(opt_body, opt_head)
 
     def PrepareInputs(self):
-        self.labels_other = np.zeros(len(self.other.pass_gen), dtype=np.float32)
-        self.labels_reference = np.ones(len(self.reference.pass_gen), dtype=np.float32)
+        self.labels_data = np.zeros(len(self.data), dtype=np.float32)
+        self.labels_reference = np.ones(len(self.reference), dtype=np.float32)
 
 
     def PrepareModel(self):
@@ -267,6 +265,8 @@ class SurrogateModel:
                     self.num_feat, self.num_event
                 )
             )
+
+        # TO-DO: NEED TO LOOK INTO CLASSIFIER ARCHITECTURE
         self.model = Classifier(
             self.num_feat,
             self.num_event,
