@@ -16,6 +16,20 @@
 using namespace Pythia8;
 using namespace LHAPDF;
 
+#include <sstream>
+#include <iomanip>
+
+// Convert event count into short string (e.g. 100k, 10m)
+std::string formatEventCount(int nEvent) {
+  if (nEvent >= 1000000) {
+    return std::to_string(nEvent / 1000000) + "M";
+  } else if (nEvent >= 1000) {
+    return std::to_string(nEvent / 1000) + "K";
+  } else {
+    return std::to_string(nEvent);
+  }
+}
+
 //==========================================================================
 
 int main(int argc, char* argv[]) {
@@ -122,7 +136,14 @@ int main(int argc, char* argv[]) {
   if (!pythia.init()) return 1;
 
   // ROOT output file.
-  TString outPath = TString::Format("/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS%.4f_%s_%devents.root", alphaSvalue, lepton_str, nEvent);
+  std::string shortEventStr = formatEventCount(nEvent);
+
+  TString outPath = TString::Format(
+    "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS%.4f_%s_%sevents.root",
+    alphaSvalue,
+    lepton_str,
+    shortEventStr.c_str()
+  );
   TFile* outFile = new TFile(outPath, "RECREATE");
 
   // ROOT histograms.  
