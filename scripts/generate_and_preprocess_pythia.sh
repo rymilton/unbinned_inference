@@ -19,6 +19,21 @@ else
     exit 1
 fi
 
+# Convert event count into short string (e.g. 100k, 10m)
+format_events() {
+    local n=$1
+
+    if (( n >= 1000000 )); then
+        echo "$((n / 1000000))M"
+    elif (( n >= 1000 )); then
+        echo "$((n / 1000))K"
+    else
+        echo "${n}"
+    fi
+}
+
+N_EVENTS_SHORT=$(format_events "${N_EVENTS}")
+
 echo "================================================"
 echo "Running pipeline with alpha_s=${ALPHA_S}, nEvents=${N_EVENTS}, lepton=${LEPTON_STR} (id=${LEPTON_ID})"
 echo "================================================"
@@ -37,7 +52,7 @@ PYTHIA_H5_DIR="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/"
 # Construct the input string to match the TString::Format filename in the C++ code:
 # pythia_H1_alphaS<alpha_s>_<lepton>_<nevents>events
 ALPHA_S_FMT=$(printf "%.4f" "$ALPHA_S")
-INPUT_STRING="pythia_H1_alphaS${ALPHA_S_FMT}_${LEPTON_STR}_${N_EVENTS}events"
+INPUT_STRING="pythia_H1_alphaS${ALPHA_S_FMT}_${LEPTON_STR}_${N_EVENTS_SHORT}events"
 
 echo ""
 echo "── Step 1: Pythia generation ────────────────────────────────────────────"
