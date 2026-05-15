@@ -133,7 +133,7 @@ int main(int argc, char* argv[]) {
   tree->Branch("W",   &tW,   "W/D");
   tree->Branch("x",   &tx,   "x/D");
   tree->Branch("y",   &ty,   "y/D");
-  tree->Branch("Weight", &tWeight, "Weight/D");
+  tree->Branch("weight", &tWeight, "weight/D");
 
 
   // ROOT histograms.  

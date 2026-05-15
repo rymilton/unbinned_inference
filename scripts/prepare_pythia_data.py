@@ -72,8 +72,7 @@ def convert_to_np(
         phi = ak.fill_none(ak.pad_none(phi, max_nonzero_particles, clip=True), 0)
         eta = ak.fill_none(ak.pad_none(eta, max_nonzero_particles, clip=True), 0)
 
-        events = events
-        stacked_event_features = np.stack([events["Q2"].to_numpy(), events["y"].to_numpy(), electron_px.to_numpy(), electron_py.to_numpy(), electron_pz.to_numpy(), np.ones(len(electron_pz))], -1)
+        stacked_event_features = np.stack([events["Q2"].to_numpy(), events["y"].to_numpy(), electron_px.to_numpy(), electron_py.to_numpy(), electron_pz.to_numpy(), events["weight"].to_numpy()], -1)
         gen_dict["event_features"].append(stacked_event_features)
 
 

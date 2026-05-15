@@ -45,6 +45,7 @@ def preprocess(data):
                 e[:, 4] / np.sqrt(e[:, 2] ** 2 + e[:, 3] ** 2 + e[:, 4] ** 2)
             ).filled(0),
             np.arctan2(e[:, 3], e[:, 2]),
+            e[:, -1], # These are the event weights
         ],
         -1,
     )
@@ -70,9 +71,7 @@ gen_p = h5.File(os.path.join(flags.data_folder, flags.file_name), "r")[
 gen_e = h5.File(os.path.join(flags.data_folder, flags.file_name), "r")[
     "gen_event_features"
 ][:].astype(np.float32)
-pass_gen = gen_e[:, -1]
-gen_e, gen_p = preprocess((gen_p, gen_e[:, :-1]))
-gen_e = np.concatenate([gen_e, pass_gen[:, None]], -1)
+gen_e, gen_p = preprocess((gen_p, gen_e))
 
 print("Saving preprocessed file")
 with h5.File(
