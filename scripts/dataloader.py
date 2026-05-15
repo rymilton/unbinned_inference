@@ -14,8 +14,6 @@ class Dataset:
         base_path,
         rank=0,
         size=1,
-        is_mc=False,
-        gen_only=False,
         nmax=None,
         norm=None,
         pass_fiducial=False,
@@ -25,14 +23,10 @@ class Dataset:
         self.rank = rank
         self.size = size
         self.base_path = base_path
-        self.is_mc = is_mc
-        self.gen_only = gen_only
         self.nmax = nmax
         self.preprocess = preprocess
 
-        assert is_mc or not gen_only, "ERROR: Dataset must have reco, mc, or both"
         # Preprocessing parameters
-
         self.mean_part = [
             0.0,
             0.0,
@@ -60,10 +54,7 @@ class Dataset:
 
     def normalize_weights(self, norm):
         # print("Total number of reco events {}".format(self.num_pass_reco))
-        if not self.gen_only:
-            self.weight = (norm * self.weight / self.num_pass_reco).astype(np.float32)
-        else:
-            self.weight = (norm * self.weight / self.num_pass_gen).astype(np.float32)
+        self.weight = (norm * self.weight / self.nmax).astype(np.float32)
 
     def standardize(self, new_p, new_e, mask):
         mask = new_p[:, :, 2] != 0
@@ -91,19 +82,13 @@ class Dataset:
 
     def prepare_dataset(self, file_names, pass_fiducial, pass_reco):
         """Load h5 files containing the data. The structure of the h5 file should be
-        reco_particle_features: p_pt,p_eta,p_phi,p_charge (B,N,4)
-        reco_event_features   : Q2, e_px, e_py, e_pz, wgt, pass_reco (B,6)
-        if MC should also contain
-        gen_particle_features : p_pt,p_eta,p_phi,p_charge (B,N,4)
-        gen_event_features    : Q2, e_px, e_py, e_pz, pass_gen (B,5)
+        gen_particle_features : p_pt,p_eta,p_phi (B,N,3)
+        gen_event_features    : Q2, e_px, e_py, e_pz, weight (B,5)
 
         """
-        self.num_pass_reco = 0
         self.num_pass_gen = 0
         self.weight = []
-        self.pass_reco = []
         self.pass_gen = []
-        reco = []
         gen = []
         for ifile, f in enumerate(file_names):
             if self.rank == 0:
@@ -111,11 +96,6 @@ class Dataset:
             # Determine the total number of event passing reco for normalization of the weights
 
             if self.nmax is None:
-                if not self.gen_only:
-                    self.nmax = h5.File(os.path.join(self.base_path, f), "r")[
-                        "reco_event_features"
-                    ].shape[0]
-                else:
                     self.nmax = h5.File(os.path.join(self.base_path, f), "r")[
                         "gen_event_features"
                     ].shape[0]
@@ -124,106 +104,22 @@ class Dataset:
             start = self.rank * per_rank
             end = min(start + per_rank, self.nmax)
 
-            # Sum of weighted events for collisions passing the reco cuts
+            # Sum of weighted events for collisions passing the gen cuts
 
-            if not self.gen_only:
-                self.num_pass_reco += np.sum(
-                    h5.File(os.path.join(self.base_path, f), "r")["reco_event_features"][
-                        : self.nmax, -2
-                    ][
-                        h5.File(os.path.join(self.base_path, f), "r")[
-                            "reco_event_features"
-                        ][: self.nmax, -1]
-                        == 1
-                    ]
-                )
+            with h5.File(os.path.join(self.base_path, f), "r") as hf:
+                gen_p = hf["gen_particle_features"][start:end].astype(np.float32)
+                gen_e = hf["gen_event_features"][start:end].astype(np.float32)
 
-                reco_p = h5.File(os.path.join(self.base_path, f), "r")[
-                    "reco_particle_features"
-                ][start:end].astype(np.float32)
-                reco_e = h5.File(os.path.join(self.base_path, f), "r")[
-                    "reco_event_features"
-                ][start:end].astype(np.float32)
-
-                self.weight.append(reco_e[:, -2].astype(np.float32))
-                self.pass_reco.append(reco_e[:, -1] == 1)
-
-                if pass_reco:
-                    mask_reco = self.pass_reco[-1]
-                else:
-                    mask_reco = np.ones_like(self.pass_reco[-1])
-            else:
-                self.pass_reco = None
-
-            if self.is_mc:
-                with h5.File(os.path.join(self.base_path, f), "r") as hf:
-                    gen_p = hf["gen_particle_features"][start:end].astype(np.float32)
-                    gen_e = hf["gen_event_features"][start:end].astype(np.float32)
-
-                    self.num_pass_gen += np.sum(
-                        hf["gen_event_features"][: self.nmax, -1] == 1
-                    )
-
-                    if self.gen_only:
-                        if "reco_event_features" in hf:
-                            weights = hf["reco_event_features"][start:end, -2].astype(np.float32)
-                        else:
-                            weights = np.ones(len(gen_e), dtype=np.float32)
-
-                        self.weight.append(weights)
-
-                self.pass_gen.append(gen_e[:, -1] == 1)
-                
-                if pass_fiducial:
-                    mask_fid = self.pass_gen[-1]
-                else:
-                    mask_fid = np.ones_like(self.pass_gen[-1])
-
-                if self.gen_only:
-                    mask_reco = mask_fid
-                gen_p = gen_p[mask_fid * mask_reco]
-                gen_e = gen_e[mask_fid * mask_reco]
-                self.pass_gen[-1] = self.pass_gen[-1][mask_fid * mask_reco]
-                
-                gen.append((gen_p, gen_e[:, :-1]))
-            else:
-                self.pass_gen = None
-                mask_fid = mask_reco
-
-            if not self.gen_only:
-                reco_p = reco_p[mask_fid * mask_reco]
-                reco_e = reco_e[mask_fid * mask_reco]
-                self.pass_reco[-1] = self.pass_reco[-1][mask_fid * mask_reco]
-
-            self.weight[-1] = self.weight[-1][mask_fid * mask_reco]
-
-            if not self.gen_only:
-                reco.append((reco_p, reco_e[:, :-2]))
-
+                weights = gen_e[:, -1]
+                self.weight.append(weights)
+            
+            gen.append((gen_p, gen_e[:, :-1])) # Excluding the event weights from this
         self.weight = np.concatenate(self.weight)
-        if not self.gen_only:
-            self.pass_reco = np.concatenate(self.pass_reco)
-            if self.preprocess:
-                self.reco = self.standardize(*self.concatenate(reco))
-            else:
-                self.reco = self.concatenate(reco)
-
-            del reco
-            gc.collect()
-            assert not np.any(np.isnan(self.reco[0])), "ERROR: NAN in particle dataset"
-            assert not np.any(np.isnan(self.reco[1])), "ERROR: NAN in event dataset"
-
-        # self.reco =  self.return_dataset(reco)
-        if self.is_mc:
-            self.pass_gen = np.concatenate(self.pass_gen)
-            if self.preprocess:
-                self.gen = self.standardize(*self.concatenate(gen))
-            else:
-                self.gen = self.concatenate(gen)
-            del gen
-            gc.collect()
-            assert not np.any(np.isnan(self.gen[0])), "ERROR: NAN in particle dataset"
-            assert not np.any(np.isnan(self.gen[1])), "ERROR: NAN in event dataset"
-
+        if self.preprocess:
+            self.gen = self.standardize(*self.concatenate(gen))
         else:
-            self.gen = None
+            self.gen = self.concatenate(gen)
+        del gen
+        gc.collect()
+        assert not np.any(np.isnan(self.gen[0])), "ERROR: NAN in particle dataset"
+        assert not np.any(np.isnan(self.gen[1])), "ERROR: NAN in event dataset"
