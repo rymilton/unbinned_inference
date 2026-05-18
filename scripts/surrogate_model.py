@@ -19,6 +19,7 @@ class SurrogateModel:
         config_file="config_omnifold.json",
         verbose=1,
         start=0,
+        weights_directory="../weights",
     ):
         self.version = version
         self.verbose = verbose
@@ -37,7 +38,7 @@ class SurrogateModel:
         self.reference = None
         self.weights=None
 
-        self.weights_folder = "../weights" # TO-DO: MAKE THIS AN EDITABLE PATH
+        self.weights_folder = weights_directory
         if not os.path.exists(self.weights_folder):
             os.makedirs(self.weights_folder)
 
