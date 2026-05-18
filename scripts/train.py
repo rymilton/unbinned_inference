@@ -1,6 +1,6 @@
 import numpy as np
 import argparse
-# from omnifold import Multifold
+from surrogate_model import SurrogateModel
 import horovod.tensorflow.keras as hvd
 import tensorflow as tf
 import tensorflow.keras.backend as K
@@ -28,14 +28,9 @@ if __name__ == "__main__":
         help="Folder containing Pythia h5 files",
     )
     parser.add_argument(
-        "--config",
-        default="config_general.json",
-        help="Basic config file containing general options",
-    )
-    parser.add_argument(
-        "--config_omnifold",
-        default="config_omnifold.json",
-        help="Basic config file containing general options",
+        "--training_config",
+        default="config_surrogate.json",
+        help="Config file containing model training paramaters",
     )
     parser.add_argument(
         "--verbose",
@@ -49,6 +44,13 @@ if __name__ == "__main__":
         type=int,
         help="Number of events to load from each dataset",
     )
+    parser.add_argument(
+        "--weights_directory",
+        default="../weights",
+        type=str,
+        help="Directory to store model",
+    )
+
 
     flags = parser.parse_args()
 
@@ -63,9 +65,10 @@ if __name__ == "__main__":
 
 
 
-    reference_files = ["pythia_H1_alphaS0.1180_eplus_100events_prep.h5"]
-    data_files = ["pythia_H1_alphaS0.15_eplus_1000000events_prep.h5"]
+    reference_files = ["pythia_H1_alphaS0.1180_eplus_1Kevents_prep.h5"]
+    data_files = ["pythia_H1_alphaS0.1500_eplus_1Kevents_prep.h5"]
 
+    # Assume data_files will be many files, one for each parameter. Thus, we should standardize each one using their own mean and std
     data = Dataset(
         data_files,
         flags.data_folder,
@@ -82,5 +85,16 @@ if __name__ == "__main__":
         nmax=flags.nmax,
     )
 
-
     K.clear_session()
+
+    surrogate = SurrogateModel(
+        version = "testing",
+        config_file=flags.training_config,
+        verbose=flags.verbose,
+        weights_directory=flags.weights_directory,
+    )
+
+    surrogate.data = data
+    surrogate.reference = reference
+    surrogate.Preprocessing()
+    surrogate.Classify()
