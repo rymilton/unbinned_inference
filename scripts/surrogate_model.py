@@ -254,8 +254,8 @@ class SurrogateModel:
         self.model.compile(opt_body, opt_head)
 
     def PrepareInputs(self):
-        self.labels_data = np.zeros(len(self.data), dtype=np.float32)
-        self.labels_reference = np.ones(len(self.reference), dtype=np.float32)
+        self.labels_data = np.zeros(len(self.data.weight), dtype=np.float32)
+        self.labels_reference = np.ones(len(self.reference.weight), dtype=np.float32)
 
 
     def PrepareModel(self):
