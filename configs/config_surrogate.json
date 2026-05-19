@@ -1,12 +1,12 @@
 {
-    'NITER': 10,
     'LR': 3e-5,
     'NEVT':5,
     'NFEAT':7,
     'BATCH_SIZE':128,
-    'EPOCHS': 50,
-    'NPATIENCE': 5,
+    'EPOCHS': 100,
+    'NPATIENCE': 20,
     'NHEADS':4,
     'NTRANSF':4,
     'NDIM':64,
+    'MODEL_NAME':'Surrogate_testing',
 }
