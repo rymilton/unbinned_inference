@@ -31,18 +31,15 @@ class Classifier(keras.Model):
         num_heads=4,
         num_transformer=1,
         projection_dim=64,
-        step=1,
-        nrep=1,
     ):
         super(Classifier, self).__init__()
         self.num_feat = num_feat
         self.num_evt = num_evt
-        self.step = step
         inputs_part = layers.Input(
-            (num_part, self.num_feat), name="inputs_particle_{}".format(step)
+            (num_part, self.num_feat), name="inputs_particle"
         )
-        inputs_evt = layers.Input((num_evt), name="inputs_event_{}".format(step))
-        inputs_mask = layers.Input((num_part, 1), name="inputs_mask_{}".format(step))
+        inputs_evt = layers.Input((num_evt), name="inputs_event")
+        inputs_mask = layers.Input((num_part, 1), name="inputs_mask")
 
         outputs_body = self.PET_body(
             inputs_part,
@@ -51,7 +48,6 @@ class Classifier(keras.Model):
             num_heads,
             num_transformer,
             projection_dim,
-            nrep,
         )
 
         self.body = keras.Model(inputs=[inputs_part, inputs_mask], outputs=outputs_body)
@@ -95,7 +91,7 @@ class Classifier(keras.Model):
         with tf.GradientTape(persistent=True) as tape:
             y_pred, y_evt = self.classifier(x)
             loss_pred = weighted_binary_crossentropy(y, y_pred)
-            loss_evt = mse(x["inputs_event_{}".format(self.step)], y_evt)
+            loss_evt = mse(x["inputs_event"], y_evt)
             loss = loss_pred + 0.1 * loss_evt
 
         self.body_optimizer.minimize(loss, self.body.trainable_variables, tape=tape)
@@ -112,7 +108,7 @@ class Classifier(keras.Model):
     def test_step(self, inputs):
         x, y = inputs
         y_pred, y_evt = self.classifier(x)
-        loss_evt = mse(x["inputs_event_{}".format(self.step)], y_evt)
+        loss_evt = mse(x["inputs_event"], y_evt)
         loss_pred = weighted_binary_crossentropy(y, y_pred)
         loss = loss_pred + 0.1 * loss_evt
         self.loss_tracker.update_state(loss)
@@ -126,7 +122,6 @@ class Classifier(keras.Model):
         num_heads=4,
         num_transformer=8,
         projection_dim=64,
-        nrep=1,
         local=True,
         K=5,
         num_local=2,
