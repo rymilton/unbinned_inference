@@ -40,7 +40,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--nmax",
-        default=1_000_000,
+        default=None,
         type=int,
         help="Number of events to load from each dataset",
     )
@@ -65,8 +65,8 @@ if __name__ == "__main__":
 
 
 
-    reference_files = ["pythia_H1_alphaS0.1180_eplus_1Kevents_prep.h5"]
-    data_files = ["pythia_H1_alphaS0.1500_eplus_1Kevents_prep.h5"]
+    reference_files = ["pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5"]
+    data_files = ["pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5"]
 
     # Assume data_files will be many files, one for each parameter. Thus, we should standardize each one using their own mean and std
     data = Dataset(
@@ -83,6 +83,7 @@ if __name__ == "__main__":
         rank=hvd.rank(),
         size=hvd.size(),
         nmax=flags.nmax,
+        norm = data.nmax,
     )
 
     K.clear_session()
