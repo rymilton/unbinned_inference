@@ -9,8 +9,8 @@ import awkward as ak
 def convert_to_np(
     file_list,
     flags,
-    max_nonzero_particles=100,  # Maximum number after applying the per-particle selection
-    nevts=1000000,
+    max_nonzero_particles=132,  # Maximum number after applying the per-particle selection
+    nevts=100000000,
 ):
     gen_dict = {
         "event_features": [],
