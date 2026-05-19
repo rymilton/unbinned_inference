@@ -149,12 +149,10 @@ def get_dataloaders(flags, mc_file_names):
             dataloaders[mc_key] = Dataset(
                 [mc_name],
                 mc_folder,
-                is_mc=True,
                 rank=hvd.rank(),
                 size=hvd.size(),
                 nmax=flags.nmax,
                 pass_fiducial=flags.pass_gen,
-                gen_only=flags.gen_only,
             )
 
         gc.collect()
@@ -468,26 +466,6 @@ def main():
         "Rapgap_Eminus_sys7": "/global/cfs/cdirs/m3246/H1/April2026_h5/Rapgap_Eminus06_sys7_prep.h5",
         "Rapgap_Eminus_sys11": "/global/cfs/cdirs/m3246/H1/April2026_h5/Rapgap_Eminus06_sys11_prep.h5",
     }
-    # Models that we will use to get weights for each dataset at either gen or reco level
-    model_paths = {
-        "pythia_alphaS14": {"reco": [], "gen": []},
-        "pythia_alphaS1136": {"reco": [], "gen": []},
-        "pythia_alphaS118": {"reco": [], "gen": []},
-        "Djangoh_Eplus": {"reco": [], "gen": []},
-        "Djangoh_Eminus": {"reco": [], "gen": []},
-        "Rapgap_Eplus": {"reco": {"Pretrain": "/global/cfs/cdirs/m3246/rmilton/H1Unfold_April2026_training/weights/OmniFold_pretrained_step1.pkl"}, "gen": {"Pretrain": "/global/cfs/cdirs/m3246/rmilton/H1Unfold_April2026_training/weights/OmniFold_pretrained_step2.pkl"}},
-        "Rapgap_Eminus": {"reco": [], "gen": []},
-        "Rapgap_Eplus_sys0": {"reco": [], "gen": []},
-        "Rapgap_Eplus_sys1": {"reco": [], "gen": []},
-        "Rapgap_Eplus_sys5": {"reco": [], "gen": []},
-        "Rapgap_Eplus_sys7": {"reco": [], "gen": []},
-        "Rapgap_Eplus_sys11": {"reco": [], "gen": []},
-        "Rapgap_Eminus_sys0": {"reco": [], "gen": []},
-        "Rapgap_Eminus_sys1": {"reco": [], "gen": []},
-        "Rapgap_Eminus_sys5": {"reco": [], "gen": []},
-        "Rapgap_Eminus_sys7": {"reco": [], "gen": []},
-        "Rapgap_Eminus_sys11": {"reco": [], "gen": []},
-    }
 
     missing_keys = [
         key for key in flags.mc_keys
@@ -504,36 +482,11 @@ def main():
         key: all_file_names[key]
         for key in flags.mc_keys
     }
-    model_weights = {}
-
-    for file_name in mc_files:
-        models_to_evaluate = model_paths[file_name]["reco"] if flags.reco else model_paths[file_name]["gen"]
-        if len(models_to_evaluate) == 0:
-            continue
-        model_weights[file_name] = {}
-        print(models_to_evaluate)
-        for model_name, model_path in models_to_evaluate.items():
-            print(model_path)
-            model_weights[file_name][model_name] = evaluate_model
-
-    exit()
 
     if flags.verbose and hvd.rank() == 0:
         print(f"Will load the following files: {mc_files}")
 
     dataloaders = get_dataloaders(flags, mc_files)
-    model_weights = {}
-
-    # Now we need to go through each dataloader and get the weights if there are any
-
-    for file_name in mc_files:
-        models_to_evaluate = model_paths[file_name]["reco"] if flags.reco else model_paths[file_name]["gen"]
-        model_weights[file_name] = {}
-        print(models_to_evaluate)
-        for model_name, model_path in models_to_evaluate:
-            print(model_path)
-            model_weights[file_name][model_name] = []
-    print(model_weights)
 
     undo_standardizing(flags, dataloaders)
 
