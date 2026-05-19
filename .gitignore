@@ -8,3 +8,5 @@ test_h5.py
 plot_utils.py
 pythia_generation/cluster_centauro
 pythia_generation/pythia_H1
+weights
+*.txt
