@@ -36,7 +36,6 @@ class SurrogateModel:
         self.num_steps_per_epoch = None
         self.data = None
         self.reference = None
-        self.weights=None
 
         self.weights_folder = weights_directory
         if not os.path.exists(self.weights_folder):
@@ -49,11 +48,12 @@ class SurrogateModel:
 
         # The ultimate goal of this model will be to train on many datasets simultaneously, but for now just assume we only have two datasets
         self.CompileModel(self.lr)
+
         self.RunClassification()
-        self.CompileModel(self.lr, fixed=False)
+        # self.CompileModel(self.lr, fixed=False)
 
     def RunClassification(self):
-        """Data versus reco MC reweighting"""
+        """Data versus reference classification"""
         if hvd.rank() == 0:
             print("RUNNING CLASSIFICATION")
 
@@ -71,12 +71,8 @@ class SurrogateModel:
                 )
             ),
             self.model,
-            NTRAIN=self.num_steps_per_epoch * self.BATCH_SIZE,
+            NTRAIN = len(self.data.weight) + len(self.reference.weight),
             cached=False,  # after first training cache the training data
-        )
-
-        self.weights = self.reweight(
-            self.data, self.model_ema, batch_size=1000
         )
 
     def RunModel(
@@ -171,8 +167,6 @@ class SurrogateModel:
                     )[self.idx],
                 }
             )
-                # del self.mc.reco, self.data.reco
-                # gc.collect()
             
         idx = self.idx
 
@@ -208,13 +202,8 @@ class SurrogateModel:
 
     def CompileModel(self, lr, fixed=False):
         if self.num_steps_per_epoch is None:
-            self.num_steps_per_epoch = (
-                int(0.7 * (self.mc.nmax + self.data.nmax))
-                // hvd.size()
-                // self.BATCH_SIZE
-            )
-            if hvd.rank() == 0:
-                print(self.num_steps_per_epoch)
+            total_events = len(self.data.weight) + len(self.reference.weight)
+            self.num_steps_per_epoch = int(0.8 * total_events)// self.BATCH_SIZE
 
         lr_schedule_body = keras.optimizers.schedules.CosineDecay(
             initial_learning_rate=lr / self.lr_factor,
