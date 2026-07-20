@@ -1,6 +1,6 @@
 #!/bin/bash
 # run_all_alphaS.sh
-# Runs generate_and_preprocess_pythia.sh for alpha_s = 0.05, 0.10, ..., 0.50
+# Runs generate_and_preprocess_pythia.sh for alpha_s = 0.10, 0.11, ..., 0.20
 # each with 1 million events.
 
 set -e
@@ -11,8 +11,9 @@ PIPELINE="${SCRIPT_DIR}/generate_and_preprocess_pythia.sh"
 N_EVENTS=1000000
 LEPTON_ID=-11
 
-for i in $(seq 1 10); do
-    ALPHA_S=$(awk "BEGIN {printf \"%.2f\", $i * 0.05}")
+for i in $(seq 10 20); do
+    ALPHA_S=$(awk "BEGIN {printf \"%.2f\", $i / 100}")
+    
     echo "========================================"
     echo "Submitting alpha_s=${ALPHA_S}"
     echo "========================================"
