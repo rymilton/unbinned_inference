@@ -1,7 +1,7 @@
 __pycache__
 clustered_pythia_files
 H1Unfold
-plots
+plots*
 pythia_files
 pythia_h5
 test_h5.py
