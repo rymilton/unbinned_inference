@@ -15,6 +15,7 @@ import numpy as np
 import argparse
 import os
 import pickle
+import gc
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -24,12 +25,41 @@ from sklearn.metrics import roc_curve, auc
 
 import tensorflow as tf
 import tensorflow.keras.backend as K
+import horovod.tensorflow.keras as hvd
 
 from dataloader import Dataset
 from surrogate_model import SurrogateModel
 from architecture import Classifier
 import utils
+import mplhep as hep
+hep.style.use("CMS")
 
+all_file_names = {
+    "pythia_alphaS14": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS14_eplus_10mil_prep.h5",
+    "pythia_alphaS15": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5",
+    "pythia_alphaS1136": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS1136_eplus_10mil_prep.h5",
+    "pythia_alphaS118": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5",
+}
+
+# Feature name look-up tables (shared by both plot functions)
+EVENT_NAMES = {
+    "0": r"$\log(Q^2)$",
+    "1": r"$y$",
+    "2": r"$e_{pT}/Q$",
+    "3": r"$e_{\eta}$",
+    "4": r"$e_{\phi}$",
+}
+
+PARTICLE_NAMES = {
+    "0": r"$\eta_p - \eta_e$",
+    "1": r"$\phi_p - \phi_e - \pi$",
+    "2": r"$\log(p_T)$",
+    "3": r"$\log(p_T/Q)$",
+    "4": r"$\log(E/Q)$",
+    "5": r"$\log(E)$",
+    "6": r"$\sqrt{(\eta_p - \eta_e)^2 + (\phi_p - \phi_e)^2}$",
+    "7": "Absolute Charge",
+}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -47,31 +77,85 @@ def load_history(weights_directory: str, model_name: str) -> dict | None:
     return None
 
 
-def build_and_load_model(opt: dict, weights_directory: str) -> tf.keras.Model:
+def build_and_load_model(flags, opt) -> tf.keras.Model:
     """Reconstruct the Classifier and load saved weights."""
-    model = Classifier(
-        opt["NFEAT"],
-        opt["NEVT"],
-        num_heads=opt["NHEADS"],
-        num_transformer=opt["NTRANSF"],
-        projection_dim=opt["NDIM"],
+    surrogate = SurrogateModel(
+        config_file=flags.training_config,
+        verbose=hvd.rank() == 0,
+        weights_directory=flags.weights_directory,
     )
+    surrogate.PrepareModel()
     model_name = opt["MODEL_NAME"]
-    checkpoint_path = os.path.join(weights_directory, model_name, "checkpoint")
-    model.load_weights(checkpoint_path)
+    checkpoint_path = os.path.join(flags.weights_directory, model_name, "checkpoint")
+    surrogate.model.load_weights(checkpoint_path).expect_partial()
     print(f"Loaded weights from {checkpoint_path}")
-    return model
+    return surrogate
 
 
-def get_predictions(model, dataset: Dataset, batch_size: int) -> np.ndarray:
-    """Return raw logits (model output before sigmoid) for all events."""
-    inputs = {
-        "inputs_particle": dataset.gen[0],
-        "inputs_event":    dataset.gen[1],
-        "inputs_mask":     dataset.gen[2],
-    }
-    logits = model.predict(inputs, batch_size=batch_size, verbose=1)[0]  # shape (N, 1)
-    return logits[:, 0]
+def evaluate_model(surrogate, dataset: Dataset, batch_size: int) -> np.ndarray:
+    """Return per-event model weights for the given dataset."""
+    weights = surrogate.reweight(dataset.gen, surrogate.model_ema, batch_size=batch_size)
+    return weights
+
+
+def get_hist_binning(arrays, nbins):
+    """Compute shared bin edges from a list of arrays, ignoring non-finite values."""
+    clean_arrays = []
+    for arr in arrays:
+        arr = np.asarray(arr)
+        if arr.size == 0:
+            continue
+        arr = arr[np.isfinite(arr)]
+        if arr.size > 0:
+            clean_arrays.append(arr)
+
+    if not clean_arrays:
+        return nbins
+
+    values = np.concatenate(clean_arrays)
+    return nbins if values.size == 0 else np.histogram_bin_edges(values, bins=nbins)
+
+
+def undo_standardizing(dataloader):
+    """Invert preprocessing transforms in place."""
+    dataloader.part, dataloader.event = dataloader.revert_standardize(
+        dataloader.gen[0], dataloader.gen[1], dataloader.gen[-1]
+    )
+    dataloader.mask = dataloader.gen[-1]
+    del dataloader.gen
+    gc.collect()
+
+
+def gather_data(dataloader, event_weights=None):
+    n_events = dataloader.event.shape[0]
+    event_plot_mask = np.ones(n_events, dtype=bool)
+    particle_plot_mask = dataloader.mask
+
+    flat_part = dataloader.part.reshape((-1, dataloader.part.shape[-1]))
+    flat_particle_plot_mask = particle_plot_mask.reshape(-1)
+    selected_part = flat_part[flat_particle_plot_mask]
+
+    particle_weights = np.broadcast_to(dataloader.weight[:, None], dataloader.mask.shape)
+    flat_particle_weights = particle_weights.reshape(-1)
+    selected_particle_weight = flat_particle_weights[flat_particle_plot_mask]
+
+    if event_weights is not None:
+        particle_event_weights = np.broadcast_to(event_weights[:, None], dataloader.mask.shape)
+        flat_particle_event_weights = particle_event_weights.reshape(-1)
+        selected_particle_event_weights = flat_particle_event_weights[flat_particle_plot_mask]
+
+        dataloader.particle_event_weight = hvd.allgather(
+            tf.constant(selected_particle_event_weights)
+        ).numpy()
+        dataloader.model_weights = hvd.allgather(
+            tf.constant(event_weights)
+        ).numpy()
+
+    dataloader.part = hvd.allgather(tf.constant(selected_part)).numpy()
+    dataloader.event = hvd.allgather(tf.constant(dataloader.event)).numpy()
+    selected_weight = dataloader.weight[event_plot_mask]
+    dataloader.weight = hvd.allgather(tf.constant(selected_weight)).numpy()
+    dataloader.particle_weight = hvd.allgather(tf.constant(selected_particle_weight)).numpy()
 
 
 # ---------------------------------------------------------------------------
@@ -91,78 +175,169 @@ def plot_loss_curve(history: dict, output_dir: str) -> None:
     ax.legend()
     ax.grid(True, alpha=0.3)
 
-    path = os.path.join(output_dir, "loss_curve.pdf")
+    path = os.path.join(output_dir, "loss_curve.png")
     fig.savefig(path, bbox_inches="tight")
     plt.close(fig)
     print(f"Saved: {path}")
 
 
-def plot_roc_curve(
-    labels: np.ndarray,
-    scores: np.ndarray,
-    weights: np.ndarray,
-    output_dir: str,
-) -> None:
-    fpr, tpr, _ = roc_curve(labels, scores, sample_weight=weights)
-    roc_auc = auc(fpr, tpr)
+def _density_vals(values: np.ndarray, weights: np.ndarray, bins) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Return (density, edges) for a weighted histogram, equivalent to density=True
+    in plt.hist.  Non-finite values (and their weights) are dropped before binning.
+    """
+    mask = np.isfinite(values)
+    v, w = values[mask], weights[mask]
+    counts, edges = np.histogram(v, bins=bins, weights=w)
+    widths = np.diff(edges)
+    total  = counts.sum()
+    dens   = counts / (total * widths) if total > 0 else np.zeros_like(counts, dtype=float)
+    return dens, edges
 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.plot(fpr, tpr, lw=2, label=f"AUC = {roc_auc:.4f}")
-    ax.plot([0, 1], [0, 1], "k--", lw=1)
 
-    ax.set_xlabel("False Positive Rate")
-    ax.set_ylabel("True Positive Rate")
-    ax.set_title("ROC Curve")
-    ax.legend(loc="lower right")
-    ax.grid(True, alpha=0.3)
-
-    path = os.path.join(output_dir, "roc_curve.pdf")
-    fig.savefig(path, bbox_inches="tight")
+def _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path):
+    """Apply common formatting to both panels and save."""
+    ax_main.set_ylabel("Normalized entries", fontsize=18)
+    ax_main.legend(fontsize=14)
+    ax_main.grid(alpha=0.3)
+    ax_ratio.set_xlabel(xlabel, fontsize=18)
+    ax_ratio.set_ylabel("Data/Ref.", fontsize=18)
+    ax_ratio.grid(alpha=0.3)
+    fig.tight_layout()
+    fig.savefig(output_path, dpi=600, bbox_inches="tight")
     plt.close(fig)
-    print(f"Saved: {path}")
+    print(f"Saved: {output_path}")
 
 
-def plot_class_probabilities(
-    probs_data: np.ndarray,
-    probs_ref:  np.ndarray,
-    weights_data: np.ndarray,
-    weights_ref:  np.ndarray,
-    output_dir: str,
-    n_bins: int = 50,
-) -> None:
-    fig, ax = plt.subplots(figsize=(7, 5))
+def _three_panel_hists(ax_main, ax_ratio, data_vals, ref_vals, data_w, data_rw, ref_w, binning, labels):
+    """
+    Top panel  – density histograms for the three distributions:
+      1. Unweighted data  – step outline, MC weights only
+      2. Reweighted data  – filled + alpha, MC weights × model weights
+      3. Reference        – step outline, MC weights only
 
-    bins = np.linspace(0, 1, n_bins + 1)
+    Bottom panel – ratio of reweighted data to reference.
+    A horizontal guide line is drawn at ratio = 1.
 
-    ax.hist(
-        probs_data,
-        bins=bins,
-        weights=weights_data / weights_data.sum(),
-        histtype="stepfilled",
-        alpha=0.5,
-        label="Data  (label = 0)",
-        color="steelblue",
-    )
-    ax.hist(
-        probs_ref,
-        bins=bins,
-        weights=weights_ref / weights_ref.sum(),
-        histtype="stepfilled",
-        alpha=0.5,
-        label="Reference (label = 1)",
-        color="tomato",
-    )
+    labels: dict with keys "unweighted", "reweighted", "reference".
+    """
+    dens_unw, edges = _density_vals(data_vals, data_w,  binning)
+    dens_rew, _     = _density_vals(data_vals, data_rw, binning)
+    dens_ref, _     = _density_vals(ref_vals,  ref_w,   binning)
 
-    ax.set_xlabel("Classifier output probability")
-    ax.set_ylabel("Normalised counts")
-    ax.set_title("Class Probability Distributions")
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    # Grab the default colour cycle so main and ratio panels share colours
+    prop_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    c_unw, c_rew, c_ref = prop_cycle[0], prop_cycle[1], prop_cycle[2]
 
-    path = os.path.join(output_dir, "class_probabilities.pdf")
-    fig.savefig(path, bbox_inches="tight")
-    plt.close(fig)
-    print(f"Saved: {path}")
+    # ---- main panel ----
+    ax_main.stairs(dens_rew, edges, color=c_rew, lw=1.5, fill=True, alpha=0.4,
+                   label=labels["reweighted"])
+    ax_main.stairs(dens_unw, edges, color=c_unw, lw=1.5,
+                   label=labels["unweighted"])
+    ax_main.stairs(dens_ref, edges, color=c_ref, lw=1.5,
+                   label=labels["reference"])
+
+    # ---- ratio panel ----
+    with np.errstate(divide="ignore", invalid="ignore"):
+        ratio_to_ref = np.where(dens_ref > 0, dens_rew / dens_ref, np.nan)
+        unweighted_ratio_to_ref = np.where(dens_ref > 0, dens_unw / dens_ref, np.nan)
+
+    ax_ratio.stairs(ratio_to_ref, edges, color=c_rew, lw=1.5)
+    ax_ratio.stairs(unweighted_ratio_to_ref, edges, color=c_unw, lw=1.5)
+    ax_ratio.axhline(1.0, color="black", lw=0.8, ls=":")
+
+    # Y-limits: centre on 1, expand symmetrically to cover the actual range
+    ax_ratio.set_ylim(0.5, 1.5)
+
+
+def plot_all_event_features(reweighted, target, output_dir: str, labels: dict, nbins: int = 50) -> None:
+    """
+    For every event-level feature plot:
+      • Unweighted reweighted-sample  (MC weight only)   -- e.g. the reference sample
+      • Model-reweighted reweighted-sample  (MC weight × model weight)
+      • Target  (MC weight only)  -- the fixed sample the reweighting is trying to match, e.g. data
+
+    `reweighted` must have `.model_weights` attached (see `gather_data`); `target` does not need it.
+
+    labels: dict with keys "unweighted", "reweighted", "reference".
+    """
+    if hvd.rank() != 0:
+        return
+
+    os.makedirs(output_dir, exist_ok=True)
+    n_features = reweighted.event.shape[-1]
+
+    for feature in range(n_features):
+        reweighted_vals = reweighted.event[:, feature]
+        target_vals     = target.event[:, feature]
+
+        binning = get_hist_binning(
+            [reweighted_vals[np.isfinite(reweighted_vals)], target_vals[np.isfinite(target_vals)]],
+            nbins,
+        )
+
+        # Composite weights: MC weight alone vs MC weight × model weight
+        reweighted_w  = reweighted.weight
+        reweighted_rw = reweighted.weight * reweighted.model_weights
+        target_w      = target.weight
+
+        fig, (ax_main, ax_ratio) = plt.subplots(
+            2, 1, figsize=(8, 7), sharex=True,
+            gridspec_kw={"height_ratios": [3, 1], "hspace": 0.1},
+        )
+        _three_panel_hists(
+            ax_main, ax_ratio, reweighted_vals, target_vals,
+            reweighted_w, reweighted_rw, target_w, binning, labels,
+        )
+
+        xlabel = EVENT_NAMES.get(str(feature), f"Event feature {feature}")
+        output_path = os.path.join(output_dir, f"event_feature_{feature}.png")
+        _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path)
+
+
+def plot_all_particle_features(reweighted, target, output_dir: str, labels: dict, nbins: int = 50) -> None:
+    """
+    For every particle-level feature plot:
+      • Unweighted reweighted-sample  (particle MC weight only)  -- e.g. the reference sample
+      • Model-reweighted reweighted-sample  (particle MC weight × per-event model weight)
+      • Target  (particle MC weight only)  -- the fixed sample the reweighting is trying to match, e.g. data
+
+    `reweighted` must have `.particle_event_weight` attached (see `gather_data`); `target` does not need it.
+
+    labels: dict with keys "unweighted", "reweighted", "reference".
+    """
+    if hvd.rank() != 0:
+        return
+
+    os.makedirs(output_dir, exist_ok=True)
+    n_features = reweighted.part.shape[-1]
+
+    for feature in range(n_features):
+        reweighted_vals = reweighted.part[:, feature]
+        target_vals     = target.part[:, feature]
+
+        binning = get_hist_binning(
+            [reweighted_vals[np.isfinite(reweighted_vals)], target_vals[np.isfinite(target_vals)]],
+            nbins,
+        )
+
+        # Composite weights: particle MC weight alone vs × per-event model weight
+        reweighted_w  = reweighted.particle_weight
+        reweighted_rw = reweighted.particle_weight * reweighted.particle_event_weight
+        target_w      = target.particle_weight
+
+        fig, (ax_main, ax_ratio) = plt.subplots(
+            2, 1, figsize=(8, 7), sharex=True,
+            gridspec_kw={"height_ratios": [3, 1], "hspace": 0.1},
+        )
+        _three_panel_hists(
+            ax_main, ax_ratio, reweighted_vals, target_vals,
+            reweighted_w, reweighted_rw, target_w, binning, labels,
+        )
+
+        xlabel = PARTICLE_NAMES.get(str(feature), f"Particle feature {feature}")
+        output_path = os.path.join(output_dir, f"particle_feature_{feature}.png")
+        _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path)
 
 
 # ---------------------------------------------------------------------------
@@ -171,56 +346,80 @@ def plot_class_probabilities(
 
 def main():
     parser = argparse.ArgumentParser(description="Classifier analysis plots")
-    parser.add_argument("--data_folder",      default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/")
-    parser.add_argument("--training_config",  default="config_surrogate.json")
-    parser.add_argument("--weights_directory",default="../weights")
-    parser.add_argument("--output_dir",       default="./plots")
-    parser.add_argument("--nmax",             default=None, type=int)
-    parser.add_argument("--batch_size",       default=512, type=int)
+    parser.add_argument("--data_folder",       default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/")
+    parser.add_argument("--training_config",   default="config_surrogate.json")
+    parser.add_argument("--weights_directory", default="../weights")
+    parser.add_argument("--output_dir",        default="./plots")
+    parser.add_argument("--nmax",              default=None, type=int)
+    parser.add_argument("--batch_size",        default=512, type=int)
     flags = parser.parse_args()
 
     os.makedirs(flags.output_dir, exist_ok=True)
+
+    hvd.init()
+    gpus = tf.config.experimental.list_physical_devices("GPU")
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+        if gpus:
+            tf.config.experimental.set_visible_devices(gpus[hvd.local_rank()], "GPU")
 
     # ---- config ----
     opt = utils.LoadJson(flags.training_config)
     model_name = opt["MODEL_NAME"]
 
     # ---- datasets ----
-    reference_files = ["pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5"]
-    data_files      = ["pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5"]
+    datasets = {
+        "data": {
+            "files": ["pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5"],
+            "label": r"$\alpha_s = .15$ (target)",
+        },
+        "reference": {
+            "files": ["pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5"],
+            "label":     r"$\alpha_s = .118$ (ref.)",
+            "label_rew": r"Reweighted $\alpha_s = .118$ (ref.)",
+        },
+    }
 
+    labels = {
+        "unweighted": datasets["reference"]["label"],
+        "reweighted": datasets["reference"]["label_rew"],
+        "reference":  datasets["data"]["label"],
+    }
+
+    print("Loading data")
     data = Dataset(
-        data_files,
+        datasets["data"]["files"],
         flags.data_folder,
         nmax=flags.nmax,
+        rank=hvd.rank(),
+        size=hvd.size(),
     )
+    print("Loading reference")
     reference = Dataset(
-        reference_files,
+        datasets["reference"]["files"],
         flags.data_folder,
         nmax=flags.nmax,
         norm=data.nmax,
+        rank=hvd.rank(),
+        size=hvd.size(),
     )
+    print("Done loading")
 
     # ---- model ----
     K.clear_session()
-    model = build_and_load_model(opt, flags.weights_directory)
+    model = build_and_load_model(flags, opt)
 
     # ---- predictions ----
-    print("Running inference on data...")
-    logits_data = get_predictions(model, data, flags.batch_size)
+    print("Evaluating model weights")
+    weights_reference = evaluate_model(model, reference, flags.batch_size)
 
-    print("Running inference on reference...")
-    logits_ref  = get_predictions(model, reference, flags.batch_size)
+    # ---- pre-process arrays ----
+    undo_standardizing(data)
+    undo_standardizing(reference)
 
-    # Sigmoid → class probabilities  (P(label=1 | x))
-    probs_data = expit(logits_data)
-    probs_ref  = expit(logits_ref)
-
-    # ---- combined arrays for ROC ----
-    all_probs   = np.concatenate([probs_data, probs_ref])
-    # data → label 0,  reference → label 1  (matches PrepareInputs convention)
-    all_labels  = np.concatenate([np.zeros(len(probs_data)), np.ones(len(probs_ref))])
-    all_weights = np.concatenate([data.weight, reference.weight])
+    # gather_data attaches .model_weights / .particle_event_weight to `reference`
+    gather_data(reference, weights_reference)
+    gather_data(data)
 
     # ---- loss curve ----
     history = load_history(flags.weights_directory, model_name)
@@ -229,15 +428,13 @@ def main():
     else:
         print("Skipping loss curve (no history found).")
 
-    # ---- ROC curve ----
-    plot_roc_curve(all_labels, all_probs, all_weights, flags.output_dir)
+    # ---- feature distributions ----
+    # `reference` is the sample being reweighted to match the fixed `data` target.
+    print("Plotting event features")
+    plot_all_event_features(reweighted=reference, target=data, output_dir=flags.output_dir, labels=labels)
 
-    # ---- class probability histograms ----
-    plot_class_probabilities(
-        probs_data, probs_ref,
-        data.weight, reference.weight,
-        flags.output_dir,
-    )
+    print("Plotting particle features")
+    plot_all_particle_features(reweighted=reference, target=data, output_dir=flags.output_dir, labels=labels)
 
     print("\nDone. Plots saved to", flags.output_dir)
 

@@ -60,14 +60,14 @@ class SurrogateModel:
         self.RunModel(
             np.concatenate(
                 (
-                    self.labels_data,
                     self.labels_reference,
+                    self.labels_data,
                 )
             ),
             np.concatenate(
                 (
+                    self.reference.weight,
                     self.data.weight, # TO-DO: Should come up with a better name than this
-                    self.reference.weight
                 )
             ),
             self.model,
@@ -149,20 +149,20 @@ class SurrogateModel:
                 {
                     "inputs_particle": np.concatenate(
                         (
-                            self.data.gen[0],
                             self.reference.gen[0],
+                            self.data.gen[0],
                         )
                     )[self.idx],
                     "inputs_event": np.concatenate(
                         (
-                            self.data.gen[1],
                             self.reference.gen[1],
+                            self.data.gen[1],
                         )
                     )[self.idx],
                     "inputs_mask": np.concatenate(
                         (
-                            self.data.gen[2],
                             self.reference.gen[2],
+                            self.data.gen[2],
                         )
                     )[self.idx],
                 }
@@ -243,8 +243,9 @@ class SurrogateModel:
         self.model.compile(opt_body, opt_head)
 
     def PrepareInputs(self):
-        self.labels_data = np.zeros(len(self.data.weight), dtype=np.float32)
-        self.labels_reference = np.ones(len(self.reference.weight), dtype=np.float32)
+        self.labels_reference = np.zeros(len(self.reference.weight), dtype=np.float32)
+        self.labels_data = np.ones(len(self.data.weight), dtype=np.float32)
+
 
 
     def PrepareModel(self):
