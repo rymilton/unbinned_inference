@@ -105,42 +105,6 @@ class Dataset:
             
             print("Num events total: ", self.nmax)
 
-            # Getting the mean and std of the event and particle features across all events
-            # mean_event, std_event = [], []
-            # # Note the last event feature is the event weight and we don't need the mean/std of that
-            # for feat_i in range(h5.File(os.path.join(self.base_path, f), "r")[
-            #         "gen_event_features"
-            #     ].shape[1]-1):
-            #     mean_event_feat_i = np.mean(h5.File(os.path.join(self.base_path, f), "r")[
-            #             "gen_event_features"
-            #         ][:, feat_i])
-            #     std_event_feat_i = np.std(h5.File(os.path.join(self.base_path, f), "r")[
-            #             "gen_event_features"
-            #         ][:, feat_i])
-            #     mean_event.append(mean_event_feat_i)
-            #     std_event.append(std_event_feat_i)
-            # self.mean_event.append(mean_event)
-            # self.std_event.append(std_event)
-
-            # mean_part, std_part = [], []
-            # nonzero_part_mask = h5.File(os.path.join(self.base_path, f), "r")[
-            #             "gen_particle_features"
-            #         ][:, :, 0].flatten()>0
-            # for feat_i in range(h5.File(os.path.join(self.base_path, f), "r")[
-            #         "gen_particle_features"
-            #     ].shape[2]):
-
-            #     mean_part_feat_i = np.mean(h5.File(os.path.join(self.base_path, f), "r")[
-            #             "gen_particle_features"
-            #         ][:, :, feat_i].flatten()[nonzero_part_mask])
-            #     std_part_feat_i = np.std(h5.File(os.path.join(self.base_path, f), "r")[
-            #             "gen_particle_features"
-            #         ][:, :, feat_i].flatten()[nonzero_part_mask])
-            #     mean_part.append(mean_part_feat_i)
-            #     std_part.append(std_part_feat_i)
-            # self.mean_part.append(mean_part)
-            # self.std_part.append(std_part)
-
             per_rank = (self.nmax + self.size - 1) // self.size  # ceiling division
             start = self.rank * per_rank
             end = min(start + per_rank, self.nmax)
