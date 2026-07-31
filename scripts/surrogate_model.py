@@ -28,7 +28,8 @@ class SurrogateModel:
         self.start = start
         self.train_frac = 0.8
         self.num_feat = self.opt["NFEAT"]
-        self.num_event = self.opt["NEVT"]
+        self.param_names = self.opt["PARAMETERS"]
+        self.num_event = self.opt["NEVT"] + len(self.param_names)
         self.lr = float(self.opt["LR"])
         self.size = hvd.size()
         self.lr_factor = 1.0

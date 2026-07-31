@@ -1,0 +1,34 @@
+- path: pythia_H1_alphaS0.1000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.10
+- path: pythia_H1_alphaS0.1100_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.11
+- path: pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5
+  parameters:
+    alpha_s: 0.118
+  is_reference: true
+- path: pythia_H1_alphaS0.1200_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.12
+- path: pythia_H1_alphaS0.1300_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.13
+- path: pythia_H1_alphaS0.1400_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.14
+- path: pythia_H1_alphaS0.1500_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.15
+- path: pythia_H1_alphaS0.1600_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.16
+- path: pythia_H1_alphaS0.1700_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.17
+- path: pythia_H1_alphaS0.1800_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.18
+- path: pythia_H1_alphaS0.1900_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.19

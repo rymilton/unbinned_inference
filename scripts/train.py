@@ -4,7 +4,7 @@ from surrogate_model import SurrogateModel
 import horovod.tensorflow.keras as hvd
 import tensorflow as tf
 import tensorflow.keras.backend as K
-# import utils
+import utils
 from dataloader import Dataset
 
 # tf.random.set_seed(1234)
@@ -24,7 +24,7 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--data_folder",
-        default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/",
+        default="../pythia_h5/",
         help="Folder containing Pythia h5 files",
     )
     parser.add_argument(
@@ -65,8 +65,24 @@ if __name__ == "__main__":
 
 
 
-    reference_files = ["pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5"]
-    data_files = ["pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5"]
+    data_files = ["pythia_H1_alphaS0.1100_eplus_1Mevents_prep.h5"]
+
+    surrogate = SurrogateModel(
+        version = "testing",
+        config_file=flags.training_config,
+        verbose=flags.verbose,
+        weights_directory=flags.weights_directory,
+    )
+
+    manifest = utils.LoadManifest("dataset_manifest.yaml")
+    data_params = utils.GetFileParams(manifest, data_files, surrogate.param_names)
+
+    # Replicate the reference once per data file, each copy carrying that file's
+    # parameter values. Without this the parameter columns alone would separate
+    # reference from data and the classifier would never look at the physics.
+    # Repeating the path makes Dataset split the reference into disjoint chunks.
+    reference_files = [utils.GetReferenceFile(manifest)["path"]] * len(data_files)
+    reference_params = data_params
 
     # Assume data_files will be many files, one for each parameter. Thus, we should standardize each one using their own mean and std
     data = Dataset(
@@ -75,6 +91,8 @@ if __name__ == "__main__":
         rank=hvd.rank(),
         size=hvd.size(),
         nmax=flags.nmax,
+        param_names=surrogate.param_names,
+        file_params=data_params,
     )
 
     reference = Dataset(
@@ -84,16 +102,12 @@ if __name__ == "__main__":
         size=hvd.size(),
         nmax=flags.nmax,
         norm = data.nmax,
+        param_names=surrogate.param_names,
+        file_params=reference_params,
     )
+    exit()
 
     K.clear_session()
-
-    surrogate = SurrogateModel(
-        version = "testing",
-        config_file=flags.training_config,
-        verbose=flags.verbose,
-        weights_directory=flags.weights_directory,
-    )
 
     surrogate.data = data
     surrogate.reference = reference

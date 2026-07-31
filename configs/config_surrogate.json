@@ -2,11 +2,12 @@
     'LR': 3e-5,
     'NEVT':5,
     'NFEAT':7,
+    'PARAMETERS': ['alpha_s'],
     'BATCH_SIZE':128,
     'EPOCHS': 50,
     'NPATIENCE': 20,
     'NHEADS':4,
     'NTRANSF':4,
     'NDIM':64,
-    'MODEL_NAME':'Surrogate_testing',
+    'MODEL_NAME':'Surrogate_testing_withalphaS',
 }

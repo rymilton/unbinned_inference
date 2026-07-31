@@ -34,12 +34,6 @@ import utils
 import mplhep as hep
 hep.style.use("CMS")
 
-all_file_names = {
-    "pythia_alphaS14": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS14_eplus_10mil_prep.h5",
-    "pythia_alphaS15": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5",
-    "pythia_alphaS1136": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS1136_eplus_10mil_prep.h5",
-    "pythia_alphaS118": "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5",
-}
 
 # Feature name look-up tables (shared by both plot functions)
 EVENT_NAMES = {
@@ -60,6 +54,18 @@ PARTICLE_NAMES = {
     "6": r"$\sqrt{(\eta_p - \eta_e)^2 + (\phi_p - \phi_e)^2}$",
     "7": "Absolute Charge",
 }
+
+# Display labels for parameter-value event features (e.g. alpha_s), keyed by
+# the manifest/config parameter name. Falls back to the raw name if missing.
+PARAM_LABELS = {
+    "alpha_s": r"$\alpha_s$",
+}
+
+
+def _format_param_label(params, param_names):
+    """Build a plot-friendly label from a manifest entry's parameter values, e.g. '$\\alpha_s$ = 0.15'."""
+    return ", ".join(f"{PARAM_LABELS.get(name, name)} = {params[name]}" for name in param_names)
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -346,12 +352,17 @@ def plot_all_particle_features(reweighted, target, output_dir: str, labels: dict
 
 def main():
     parser = argparse.ArgumentParser(description="Classifier analysis plots")
-    parser.add_argument("--data_folder",       default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/")
+    parser.add_argument("--data_folder",       default="../pythia_h5/")
     parser.add_argument("--training_config",   default="config_surrogate.json")
-    parser.add_argument("--weights_directory", default="../weights")
+    parser.add_argument("--weights_directory", default="/projects/bhvk/rmilton/H1Unfold_April2026_training/weights/")
     parser.add_argument("--output_dir",        default="./plots")
     parser.add_argument("--nmax",              default=None, type=int)
     parser.add_argument("--batch_size",        default=512, type=int)
+    parser.add_argument(
+        "--data_file",
+        default="pythia_H1_alphaS0.1500_eplus_1Mevents_prep.h5",
+        help="Non-reference (target) manifest file the reference sample is reweighted toward",
+    )
     flags = parser.parse_args()
 
     os.makedirs(flags.output_dir, exist_ok=True)
@@ -366,17 +377,32 @@ def main():
     # ---- config ----
     opt = utils.LoadJson(flags.training_config)
     model_name = opt["MODEL_NAME"]
+    param_names = opt["PARAMETERS"]
+    manifest = utils.LoadManifest("dataset_manifest.yaml")
+
+    # Label the parameter-value event feature columns (appended after the base
+    # NEVT physics columns) for the per-feature plots below.
+    for i, name in enumerate(param_names):
+        EVENT_NAMES[str(opt["NEVT"] + i)] = PARAM_LABELS.get(name, name)
 
     # ---- datasets ----
+    reference_entry = utils.GetReferenceFile(manifest)
+    data_entry = utils.GetManifestEntry(manifest, flags.data_file)
+
     datasets = {
         "data": {
-            "files": ["pythia_H1_alphaS0.1500_eplus_5Mevents_prep.h5"],
-            "label": r"$\alpha_s = .15$ (target)",
+            "files": [data_entry["path"]],
+            "label": _format_param_label(data_entry["parameters"], param_names) + " (target)",
         },
         "reference": {
-            "files": ["pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5"],
-            "label":     r"$\alpha_s = .118$ (ref.)",
-            "label_rew": r"Reweighted $\alpha_s = .118$ (ref.)",
+            "files": [reference_entry["path"]],
+            # The reference is physically the alpha_s=0.118 sample, so label the plots
+            # with its own parameters, but feed the network the *target's* parameter
+            # values -- that is the point at which we want the likelihood ratio, and it
+            # matches how the reference was labelled during training.
+            "params": data_entry["parameters"],
+            "label":     _format_param_label(reference_entry["parameters"], param_names) + " (ref.)",
+            "label_rew": "Reweighted " + _format_param_label(reference_entry["parameters"], param_names) + " (ref.)",
         },
     }
 
@@ -393,6 +419,8 @@ def main():
         nmax=flags.nmax,
         rank=hvd.rank(),
         size=hvd.size(),
+        param_names=param_names,
+        file_params=utils.GetFileParams(manifest, datasets["data"]["files"], param_names),
     )
     print("Loading reference")
     reference = Dataset(
@@ -402,6 +430,8 @@ def main():
         norm=data.nmax,
         rank=hvd.rank(),
         size=hvd.size(),
+        param_names=param_names,
+        file_params=[datasets["reference"]["params"]],
     )
     print("Done loading")
 

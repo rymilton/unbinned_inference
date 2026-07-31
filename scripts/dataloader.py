@@ -3,8 +3,8 @@ import numpy as np
 import os
 import h5py as h5
 import gc
-from sklearn.ensemble import GradientBoostingRegressor
 import pickle
+from collections import Counter, defaultdict
 
 
 class Dataset:
@@ -19,17 +19,17 @@ class Dataset:
         pass_fiducial=False,
         pass_reco=False,
         preprocess=True,
+        param_names=None,
+        file_params=None,
     ):
         self.rank = rank
         self.size = size
         self.base_path = base_path
         self.nmax = nmax
         self.preprocess = preprocess
+        self.param_names = param_names or []
 
         # Preprocessing parameters
-        # self.mean_part, self.std_part = [], []
-        # self.mean_event, self.std_event = [], []
-
 
         self.mean_part = [
             0.0,
@@ -53,12 +53,20 @@ class Dataset:
         self.mean_event = [6.4188385, 0.3331013, 0.8914633, -0.8352072, -0.07296985]
         self.std_event = [0.97656405, 0.1895471, 0.14934653, 0.4191545, 1.734126]
 
-        self.prepare_dataset(file_names, pass_fiducial, pass_reco)
+        # Parameter-value features (e.g. alpha_s) are appended after the physics event
+        # features and excluded from standardization via identity mean/std.
+        self.mean_event = self.mean_event + [0.0] * len(self.param_names)
+        self.std_event = self.std_event + [1.0] * len(self.param_names)
+
+        self.prepare_dataset(file_names, pass_fiducial, pass_reco, file_params)
         self.normalize_weights(self.nmax if norm is None else norm)
 
     def normalize_weights(self, norm):
         # print("Total number of reco events {}".format(self.num_pass_reco))
-        self.weight = (norm * self.weight / self.nmax).astype(np.float32)
+        # Each file's weights were already divided by that file's own nmax and by
+        # the file count in prepare_dataset, so here we just rescale the combined
+        # array to `norm`.
+        self.weight = (norm * self.weight).astype(np.float32)
 
     def standardize(self, new_p, new_e, mask):
         mask = new_p[:, :, 2] != 0
@@ -84,30 +92,63 @@ class Dataset:
         return concatenated_part1, concatenated_part2, mask
     
 
-    def prepare_dataset(self, file_names, pass_fiducial, pass_reco):
+    def prepare_dataset(self, file_names, pass_fiducial, pass_reco, file_params=None):
         """Load h5 files containing the data. The structure of the h5 file should be
         gen_particle_features : p_pt,p_eta,p_phi (B,N,3)
         gen_event_features    : Q2, e_px, e_py, e_pz, weight (B,5)
 
+        A path listed more than once in file_names is split into that many disjoint
+        chunks, one per occurrence. This is how a sample is replicated across several
+        parameter values (see file_params) without any event appearing twice.
         """
+        if self.param_names:
+            assert file_params is not None and len(file_params) == len(file_names), (
+                "file_params must be given, one entry per file_names, when param_names is set"
+            )
+
         self.num_pass_gen = 0
         self.weight = []
         self.pass_gen = []
         gen = []
+        requested_nmax = self.nmax  # cap requested by the caller, or None for each file's full size
+        self.nmax = 0  # accumulates the total (all-file) event count as files are loaded
+        path_counts = Counter(file_names)  # how many chunks each path is split into
+        copies_seen = defaultdict(int)  # which chunk of that path we are on
         for ifile, f in enumerate(file_names):
             if self.rank == 0:
                 print("Loading file {}".format(f))
 
-            if self.nmax is None:
-                self.nmax = h5.File(os.path.join(self.base_path, f), "r")[
-                    "gen_event_features"
-                ].shape[0]
-            
-            print("Num events total: ", self.nmax)
+            with h5.File(os.path.join(self.base_path, f), "r") as hf:
+                file_total = hf["gen_event_features"].shape[0]
 
-            per_rank = (self.nmax + self.size - 1) // self.size  # ceiling division
-            start = self.rank * per_rank
-            end = min(start + per_rank, self.nmax)
+            n_copies = path_counts[f]
+            copy_index = copies_seen[f]
+            print(f, n_copies, copy_index)
+            copies_seen[f] += 1
+
+            # Each occurrence gets its own slice of the file, so copies never overlap.
+            available = file_total // n_copies
+            file_nmax = available if requested_nmax is None else min(requested_nmax, available)
+            if (
+                self.rank == 0
+                and copy_index == 0
+                and requested_nmax is not None
+                and requested_nmax > available
+            ):
+                print(
+                    "[WARNING] {} is split into {} disjoint copies; capping to {} events "
+                    "per copy (requested {})".format(f, n_copies, available, requested_nmax)
+                )
+            chunk_offset = copy_index * available
+            print(chunk_offset)
+            self.nmax += file_nmax
+
+            print("Num events total: ", file_nmax)
+
+            per_rank = (file_nmax + self.size - 1) // self.size  # ceiling division
+            start = chunk_offset + self.rank * per_rank
+            end = min(start + per_rank, chunk_offset + file_nmax)
+            print(start, end)
 
             # Sum of weighted events for collisions passing the gen cuts
 
@@ -115,10 +156,24 @@ class Dataset:
                 gen_p = hf["gen_particle_features"][start:end].astype(np.float32)
                 gen_e = hf["gen_event_features"][start:end].astype(np.float32)
 
-                weights = gen_e[:, -1]
+                # Normalize this file's weights by its own event count, so files of
+                # different sizes contribute on a comparable per-event scale, and by
+                # the number of files, so each file supplies 1/N of the dataset's
+                # total weight. This makes the total independent of both file size
+                # and file count, so two datasets sharing a `norm` stay balanced.
+                weights = gen_e[:, -1] / (file_nmax * len(file_names))
                 self.weight.append(weights)
-            
-            gen.append((gen_p, gen_e[:, :-1])) # Excluding the event weights from this
+
+            event_feats = gen_e[:, :-1]  # Excluding the event weights from this
+            if self.param_names:
+                params = file_params[ifile]
+                param_vals = np.array(
+                    [params[name] for name in self.param_names], dtype=np.float32
+                )
+                event_feats = np.concatenate(
+                    [event_feats, np.tile(param_vals, (event_feats.shape[0], 1))], axis=1
+                )
+            gen.append((gen_p, event_feats))
         self.weight = np.concatenate(self.weight)
         if self.preprocess:
             self.gen = self.standardize(*self.concatenate(gen))
