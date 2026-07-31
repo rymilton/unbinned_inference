@@ -1,0 +1,33 @@
+name: unbinned_inference
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - scipy
+  - scikit-learn
+  - h5py
+  - pyyaml
+  - matplotlib
+  - uproot
+  - awkward
+  - openmpi
+  - pip:
+# tensorflow[and-cuda] bundles its own matching CUDA/cuDNN/NCCL as pip
+# wheels. Do not add conda cudatoolkit/cudnn/nccl packages -- they'd be
+# a mismatched, unused duplicate stack. Pinned to 2.15 to stay on
+# Keras 2 (tf.keras) rather than the Keras 3 default in 2.16+.
+# Must be 2.15.0.post1, not bare 2.15.0 (that release had a broken
+# tensorflow[and-cuda] extra).
+      - tensorflow[and-cuda]==2.15.0.post1
+      - mplhep
+# fastjet's Python bindings are normally sourced from the CVMFS
+# LCG_109 view on Perlmutter; this pip package is the local fallback.
+      - fastjet
+#
+# horovod is intentionally NOT listed here -- see install_horovod.sh.
+# It needs build-time env vars set before pip installs it
+# (HOROVOD_GPU_OPERATIONS=NCCL, HOROVOD_WITH_TENSORFLOW=1), and there's
+# no way to set those from within a conda environment.yml pip section.
+# A plain `pip install horovod` here would silently build CPU-only ops.
