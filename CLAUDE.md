@@ -4,19 +4,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-Simulation-based inference (SBI) study for extracting alpha_s from H1 (HERA ep DIS)-like Pythia
-simulations. The pipeline: generate Pythia events at a given alpha_s → cluster final-state particles
-into jets → convert/preprocess events into ML-ready tensors → train a transformer classifier to
-distinguish a "data" Pythia sample from a fixed "reference" Pythia sample → use the classifier's
-learned likelihood ratio to reweight the data sample toward the reference → make QA/validation plots
-of the reweighted distributions. This is a classifier-reweighting approach to unbinned inference, not
-a traditional binned unfolding.
+Neural simulation-based inference (NSBI) to determine the **Pythia generation parameters** that best
+reproduce **unbinned unfolded H1 data** (HERA ep DIS). There is more than one parameter — `alpha_s` is
+simply the first one implemented — so **do not write alpha_s-specific code**; the manifest and config
+plumbing exist precisely so parameters can be added without touching the model or dataloader.
 
-The classifier is **parameterized**: the physics parameter values of each sample (currently just
-`alpha_s`, but the code is written for an arbitrary list) are fed to the network as extra event-level
-input features, so one model learns the likelihood ratio as a function of the parameter rather than
-one model per parameter point. See "Parameterized classifier" below — the reference-replication step
-is essential and non-obvious.
+The pipeline: generate Pythia events at a given set of generation parameters → convert/preprocess
+events into ML-ready tensors → train a transformer classifier to distinguish a "data" Pythia sample
+from a fixed "reference" Pythia sample → the classifier's learned likelihood ratio (`f/(1-f)`) is the
+**surrogate likelihood**, which is ultimately evaluated against unfolded H1 data to infer the
+parameters → QA/validation plots of the reweighted distributions. This is a classifier-reweighting
+approach to unbinned inference, not a traditional binned unfolding.
+
+The classifier is **parameterized**: each sample's generation-parameter values are fed to the network
+as extra event-level input features, so one model covers the parameter space continuously rather than
+one model per point. See "Parameterized classifier" below — the reference-replication step is
+essential and non-obvious.
+
+**Current status:** development/validation runs are Pythia-against-Pythia (closure tests, where the
+"data" side is simulation at a known parameter point). Unfolded H1 data is the eventual target — the
+H1/Rapgap/Djangoh paths referenced in `QA_plots.py` point that way.
 
 `H1Unfold/` is a separate, unrelated project living in this same directory tree — ignore it.
 
