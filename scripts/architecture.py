@@ -27,7 +27,7 @@ class Classifier(keras.Model):
         self,
         num_feat,
         num_evt,
-        num_part=132,
+        num_part=100,
         num_heads=4,
         num_transformer=1,
         projection_dim=64,
