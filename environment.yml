@@ -12,7 +12,8 @@ dependencies:
   - matplotlib
   - uproot
   - awkward
-  - openmpi
+  - psutil
+  - cloudpickle
   - pip:
 # tensorflow[and-cuda] bundles its own matching CUDA/cuDNN/NCCL as pip
 # wheels. Do not add conda cudatoolkit/cudnn/nccl packages -- they'd be
