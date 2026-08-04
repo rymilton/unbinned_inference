@@ -58,6 +58,13 @@ class Dataset:
         self.mean_event = self.mean_event + [0.0] * len(self.param_names)
         self.std_event = self.std_event + [1.0] * len(self.param_names)
 
+        # float32, not the numpy default float64, so standardize()/revert_standardize()
+        # don't upcast the (much larger) particle array when broadcasting against these.
+        self.mean_part = np.array(self.mean_part, dtype=np.float32)
+        self.std_part = np.array(self.std_part, dtype=np.float32)
+        self.mean_event = np.array(self.mean_event, dtype=np.float32)
+        self.std_event = np.array(self.std_event, dtype=np.float32)
+
         self.prepare_dataset(file_names, pass_fiducial, pass_reco, file_params)
         self.normalize_weights(self.nmax if norm is None else norm)
 
@@ -123,7 +130,6 @@ class Dataset:
 
             n_copies = path_counts[f]
             copy_index = copies_seen[f]
-            print(f, n_copies, copy_index)
             copies_seen[f] += 1
 
             # Each occurrence gets its own slice of the file, so copies never overlap.
@@ -140,7 +146,6 @@ class Dataset:
                     "per copy (requested {})".format(f, n_copies, available, requested_nmax)
                 )
             chunk_offset = copy_index * available
-            print(chunk_offset)
             self.nmax += file_nmax
 
             print("Num events total: ", file_nmax)
@@ -148,7 +153,6 @@ class Dataset:
             per_rank = (file_nmax + self.size - 1) // self.size  # ceiling division
             start = chunk_offset + self.rank * per_rank
             end = min(start + per_rank, chunk_offset + file_nmax)
-            print(start, end)
 
             # Sum of weighted events for collisions passing the gen cuts
 
