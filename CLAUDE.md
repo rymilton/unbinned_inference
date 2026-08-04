@@ -210,7 +210,8 @@ the pipeline scripts above.
 ## Running the pipeline
 
 The conda environment is defined by `environment.yml` (name `unbinned_inference`; on this machine it
-lives at `/u/rmilton/.conda/envs/unbinned_inference`). Horovod is deliberately **not** in that file —
+lives at `/work/nvme/bhvk/rmilton/miniforge3/envs/unbinned_inference` — check `conda env list`, it has
+moved before). Horovod is deliberately **not** in that file —
 it needs build-time env vars, see `install_horovod.sh`. TensorFlow is pinned to `2.15.0.post1` to stay
 on Keras 2 (`tf.keras`); 2.16+ defaults to Keras 3 and will break `architecture.py`. The jet-clustering
 track additionally assumes CVMFS is available (`run_centauro.sh` sources the LCG_109
