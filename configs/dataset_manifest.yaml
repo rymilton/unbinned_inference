@@ -4,7 +4,7 @@
 - path: pythia_H1_alphaS0.1100_eplus_1Mevents_prep.h5
   parameters:
     alpha_s: 0.11
-- path: pythia_H1_alphaS0.1180_eplus_5Mevents_prep.h5
+- path: pythia_H1_alphaS0.1180_eplus_5Mevents_100maxpart_prep.h5
   parameters:
     alpha_s: 0.118
   is_reference: true
