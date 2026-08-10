@@ -64,9 +64,20 @@ int main(int argc, char* argv[]) {
   }
   const char* lepton_str = (lepton_id == -11) ? "eplus" : "eminus";
 
+  // Parse StringZ:bLund from command line argument; default to 0.98 if not provided.
+  double bLundValue = 0.98;
+  if (argc >= 5) {
+    std::istringstream ss(argv[4]);
+    if (!(ss >> bLundValue)) {
+      std::cerr << "Error: invalid bLund value '" << argv[4] << "'" << std::endl;
+      return 1;
+    }
+  }
+
   std::cout << "Running with alpha_s = " << alphaSvalue
             << ", nEvent = " << nEvent
-            << ", lepton_id = " << lepton_id << std::endl;
+            << ", lepton_id = " << lepton_id
+            << ", bLund = " << bLundValue << std::endl;
 
   // Beam energies, minimal Q2, number of events to generate.
   double eProton   = 920.;
@@ -121,7 +132,10 @@ int main(int argc, char* argv[]) {
   pythia.readString("SpaceShower:alphaSorder = 1");
 
   // hadron-level on/off. By default this is on and it seems like it should be on but Vinny has it turned off
-  pythia.readString("HadronLevel:Hadronize = on"); 
+  pythia.readString("HadronLevel:Hadronize = on");
+
+  // Lund fragmentation function b parameter. Pythia default is 0.98.
+  pythia.settings.parm("StringZ:bLund", bLundValue);
 
   pythia.readString("PartonLevel:FSR = on"); // This is the default, but explicitly set here for clarity.
 
@@ -139,8 +153,9 @@ int main(int argc, char* argv[]) {
   std::string shortEventStr = formatEventCount(nEvent);
 
   TString outPath = TString::Format(
-    "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS%.4f_%s_%sevents.root",
+    "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS%.4f_bLund%.4f_%s_%sevents.root",
     alphaSvalue,
+    bLundValue,
     lepton_str,
     shortEventStr.c_str()
   );

@@ -7,7 +7,6 @@
 - path: pythia_H1_alphaS0.1180_eplus_5Mevents_100maxpart_prep.h5
   parameters:
     alpha_s: 0.118
-  is_reference: true
 - path: pythia_H1_alphaS0.1200_eplus_1Mevents_prep.h5
   parameters:
     alpha_s: 0.12
@@ -32,3 +31,100 @@
 - path: pythia_H1_alphaS0.1900_eplus_1Mevents_prep.h5
   parameters:
     alpha_s: 0.19
+- path: pythia_H1_alphaS0.1000_bLund0.2000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.100
+    b_lund: 0.2
+- path: pythia_H1_alphaS0.1000_bLund0.8000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.100
+    b_lund: 0.8
+- path: pythia_H1_alphaS0.1000_bLund1.4000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.100
+    b_lund: 1.4
+- path: pythia_H1_alphaS0.1000_bLund2.0000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.100
+    b_lund: 2.0
+- path: pythia_H1_alphaS0.1250_bLund0.2000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.125
+    b_lund: 0.2
+- path: pythia_H1_alphaS0.1250_bLund0.8000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.125
+    b_lund: 0.8
+- path: pythia_H1_alphaS0.1250_bLund1.4000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.125
+    b_lund: 1.4
+- path: pythia_H1_alphaS0.1250_bLund2.0000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.125
+    b_lund: 2.0
+- path: pythia_H1_alphaS0.1500_bLund0.2000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.150
+    b_lund: 0.2
+- path: pythia_H1_alphaS0.1500_bLund0.8000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.150
+    b_lund: 0.8
+- path: pythia_H1_alphaS0.1500_bLund1.4000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.150
+    b_lund: 1.4
+- path: pythia_H1_alphaS0.1500_bLund2.0000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.150
+    b_lund: 2.0
+- path: pythia_H1_alphaS0.1750_bLund0.2000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.175
+    b_lund: 0.2
+- path: pythia_H1_alphaS0.1750_bLund0.8000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.175
+    b_lund: 0.8
+- path: pythia_H1_alphaS0.1750_bLund1.4000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.175
+    b_lund: 1.4
+- path: pythia_H1_alphaS0.1750_bLund2.0000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.175
+    b_lund: 2.0
+- path: pythia_H1_alphaS0.2000_bLund0.2000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.200
+    b_lund: 0.2
+- path: pythia_H1_alphaS0.2000_bLund0.8000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.200
+    b_lund: 0.8
+- path: pythia_H1_alphaS0.2000_bLund1.4000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.200
+    b_lund: 1.4
+- path: pythia_H1_alphaS0.2000_bLund2.0000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.200
+    b_lund: 2.0
+- path: pythia_H1_alphaS0.1300_bLund1.7000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.13
+    b_lund: 1.7
+- path: pythia_H1_alphaS0.1600_bLund1.1000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.16
+    b_lund: 1.1
+- path: pythia_H1_alphaS0.1900_bLund0.5000_eplus_1Mevents_prep.h5
+  parameters:
+    alpha_s: 0.19
+    b_lund: 0.5
+- path: pythia_H1_alphaS0.1180_bLund0.9800_eplus_10Mevents_prep.h5
+  parameters:
+    alpha_s: 0.118
+    b_lund: 0.98
+  is_reference: true
