@@ -74,10 +74,18 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  // Parse output directory from command line argument; default to the
+  // pscratch data directory if not provided.
+  std::string outputDir = "/pscratch/sd/r/rmilton/unbinned_inference_data/pythia_files";
+  if (argc >= 6) {
+    outputDir = argv[5];
+  }
+
   std::cout << "Running with alpha_s = " << alphaSvalue
             << ", nEvent = " << nEvent
             << ", lepton_id = " << lepton_id
-            << ", bLund = " << bLundValue << std::endl;
+            << ", bLund = " << bLundValue
+            << ", outputDir = " << outputDir << std::endl;
 
   // Beam energies, minimal Q2, number of events to generate.
   double eProton   = 920.;
@@ -153,7 +161,8 @@ int main(int argc, char* argv[]) {
   std::string shortEventStr = formatEventCount(nEvent);
 
   TString outPath = TString::Format(
-    "/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/pythia_H1_alphaS%.4f_bLund%.4f_%s_%sevents.root",
+    "%s/pythia_H1_alphaS%.4f_bLund%.4f_%s_%sevents.root",
+    outputDir.c_str(),
     alphaSvalue,
     bLundValue,
     lepton_str,

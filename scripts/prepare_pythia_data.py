@@ -89,12 +89,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--input_directory",
-        default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_files/",
+        default="/pscratch/sd/r/rmilton/unbinned_inference_data/pythia_files/",
         help="Folder containing the clustered Pythia files in .root format",
     )
     parser.add_argument(
         "--output_directory",
-        default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/",
+        default="/pscratch/sd/r/rmilton/unbinned_inference_data/pythia_h5/",
         help="Output folder containing Pythia h5 files",
     )
 

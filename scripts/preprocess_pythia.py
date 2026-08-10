@@ -56,7 +56,7 @@ def preprocess(data):
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--data_folder",
-    default="/global/cfs/cdirs/m3246/rmilton/unbinned_inference/pythia_h5/",
+    default="/pscratch/sd/r/rmilton/unbinned_inference_data/pythia_h5/",
     help="Folder containing data and MC files",
 )
 parser.add_argument("--file_name", default="pythia_H1_alphaS118_eplus_10mil.h5", help="File to load")
