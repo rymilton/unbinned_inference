@@ -145,29 +145,29 @@ class SurrogateModel:
         if not cached:
             self.idx = np.arange(label.shape[0])
             np.random.shuffle(self.idx)
-
-            self.tf_data = tf.data.Dataset.from_tensor_slices(
-                {
-                    "inputs_particle": np.concatenate(
-                        (
-                            self.reference.gen[0],
-                            self.data.gen[0],
-                        )
-                    )[self.idx],
-                    "inputs_event": np.concatenate(
-                        (
-                            self.reference.gen[1],
-                            self.data.gen[1],
-                        )
-                    )[self.idx],
-                    "inputs_mask": np.concatenate(
-                        (
-                            self.reference.gen[2],
-                            self.data.gen[2],
-                        )
-                    )[self.idx],
-                }
-            )
+            with tf.device('/cpu:0'):
+                self.tf_data = tf.data.Dataset.from_tensor_slices(
+                    {
+                        "inputs_particle": np.concatenate(
+                            (
+                                self.reference.gen[0],
+                                self.data.gen[0],
+                            )
+                        )[self.idx],
+                        "inputs_event": np.concatenate(
+                            (
+                                self.reference.gen[1],
+                                self.data.gen[1],
+                            )
+                        )[self.idx],
+                        "inputs_mask": np.concatenate(
+                            (
+                                self.reference.gen[2],
+                                self.data.gen[2],
+                            )
+                        )[self.idx],
+                    }
+                )
             
         idx = self.idx
 
