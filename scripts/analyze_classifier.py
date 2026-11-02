@@ -415,7 +415,7 @@ def main():
     parser = argparse.ArgumentParser(description="Classifier analysis plots")
     parser.add_argument("--data_folder",       default="../pythia_h5/")
     parser.add_argument("--training_config",   default="config_surrogate.json")
-    parser.add_argument("--weights_directory", default="/projects/bhvk/rmilton/H1Unfold_April2026_training/weights/")
+    parser.add_argument("--weights_directory", default="../weights/")
     parser.add_argument("--output_dir",        default="./plots")
     parser.add_argument("--nmax",              default=None, type=int)
     parser.add_argument("--batch_size",        default=512, type=int)
