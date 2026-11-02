@@ -61,6 +61,54 @@ PARAM_LABELS = {
     "alpha_s": r"$\alpha_s$",
 }
 
+# Fixed (low, high) bin ranges and (low, high) y-axis limits for the main panel,
+# keyed the same way as EVENT_NAMES/PARTICLE_NAMES. Chosen by eye from
+# plots_alphaS0.15 and plots_alphaS0.13, which agree closely on shape/range
+# for every non-parameter feature. Fixing these makes plots comparable across
+# runs/target points instead of each rescaling to its own data.
+EVENT_BINNING = {
+    "0": (5.0, 11.0),    # log(Q2)
+    "1": (0.2, 0.7),     # y
+    "2": (0.0, 2.2),     # e_pT/Q
+    "3": (-1.5, 4.5),    # e_eta
+    "4": (-np.pi, np.pi),    # e_phi
+}
+EVENT_YLIM = {
+    "0": (0.0, 1.3),
+    "1": (0.0, 4.3),
+    "2": (0.0, 5.5),
+    "3": (0.0, 1.5),
+    "4": (0.0, 0.19),
+}
+
+PARTICLE_BINNING = {
+    "0": (-3.0, 4.5),    # eta_p - eta_e
+    "1": (-3.2, 3.2),    # phi_p - phi_e - pi
+    "2": (-2.5, 4.5),    # log(pT)
+    "3": (-8.0, 1.5),    # log(pT/Q)
+    "4": (-7.5, 2.5),    # log(E/Q)
+    "5": (-2.5, 6.0),    # log(E)
+    "6": (0.0, 7.5),     # delta_r
+}
+PARTICLE_YLIM = {
+    "0": (0.0, 0.42),
+    "1": (0.0, 0.8),
+    "2": (0.0, 0.42),
+    "3": (0.0, 0.42),
+    "4": (0.0, 0.42),
+    "5": (0.0, 0.42),
+    "6": (0.0, 0.7),
+}
+
+# Fixed range/y-limit for a parameter-value event feature (e.g. alpha_s), keyed
+# by the manifest/config parameter name. Falls back to auto-ranging if missing.
+PARAM_BINNING = {
+    "alpha_s": (0.09, 0.21),
+}
+PARAM_YLIM = {
+    "alpha_s": (0.0, 60.0),
+}
+
 
 def _format_param_label(params, param_names):
     """Build a plot-friendly label from a manifest entry's parameter values, e.g. '$\\alpha_s$ = 0.15'."""
@@ -104,8 +152,17 @@ def evaluate_model(surrogate, dataset: Dataset, batch_size: int) -> np.ndarray:
     return weights
 
 
-def get_hist_binning(arrays, nbins):
-    """Compute shared bin edges from a list of arrays, ignoring non-finite values."""
+def get_hist_binning(arrays, nbins, fixed_range=None):
+    """
+    Return bin edges for a list of arrays, ignoring non-finite values.
+
+    If `fixed_range` (low, high) is given, bins are `nbins` equal-width bins
+    spanning that fixed range. Otherwise bin edges are computed from the data.
+    """
+    if fixed_range is not None:
+        low, high = fixed_range
+        return np.linspace(low, high, nbins + 1)
+
     clean_arrays = []
     for arr in arrays:
         arr = np.asarray(arr)
@@ -201,9 +258,11 @@ def _density_vals(values: np.ndarray, weights: np.ndarray, bins) -> tuple[np.nda
     return dens, edges
 
 
-def _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path):
+def _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path, ylim=None):
     """Apply common formatting to both panels and save."""
     ax_main.set_ylabel("Normalized entries", fontsize=18)
+    if ylim is not None:
+        ax_main.set_ylim(*ylim)
     ax_main.legend(fontsize=14)
     ax_main.grid(alpha=0.3)
     ax_ratio.set_xlabel(xlabel, fontsize=18)
@@ -280,6 +339,7 @@ def plot_all_event_features(reweighted, target, output_dir: str, labels: dict, n
         binning = get_hist_binning(
             [reweighted_vals[np.isfinite(reweighted_vals)], target_vals[np.isfinite(target_vals)]],
             nbins,
+            fixed_range=EVENT_BINNING.get(str(feature)),
         )
 
         # Composite weights: MC weight alone vs MC weight × model weight
@@ -298,7 +358,7 @@ def plot_all_event_features(reweighted, target, output_dir: str, labels: dict, n
 
         xlabel = EVENT_NAMES.get(str(feature), f"Event feature {feature}")
         output_path = os.path.join(output_dir, f"event_feature_{feature}.png")
-        _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path)
+        _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path, ylim=EVENT_YLIM.get(str(feature)))
 
 
 def plot_all_particle_features(reweighted, target, output_dir: str, labels: dict, nbins: int = 50) -> None:
@@ -325,6 +385,7 @@ def plot_all_particle_features(reweighted, target, output_dir: str, labels: dict
         binning = get_hist_binning(
             [reweighted_vals[np.isfinite(reweighted_vals)], target_vals[np.isfinite(target_vals)]],
             nbins,
+            fixed_range=PARTICLE_BINNING.get(str(feature)),
         )
 
         # Composite weights: particle MC weight alone vs × per-event model weight
@@ -343,7 +404,7 @@ def plot_all_particle_features(reweighted, target, output_dir: str, labels: dict
 
         xlabel = PARTICLE_NAMES.get(str(feature), f"Particle feature {feature}")
         output_path = os.path.join(output_dir, f"particle_feature_{feature}.png")
-        _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path)
+        _save_feature_plot(ax_main, ax_ratio, fig, xlabel, output_path, ylim=PARTICLE_YLIM.get(str(feature)))
 
 
 # ---------------------------------------------------------------------------
@@ -381,9 +442,15 @@ def main():
     manifest = utils.LoadManifest("dataset_manifest.yaml")
 
     # Label the parameter-value event feature columns (appended after the base
-    # NEVT physics columns) for the per-feature plots below.
+    # NEVT physics columns) for the per-feature plots below, and give them
+    # fixed binning/y-limits too if known (PARAM_BINNING/PARAM_YLIM).
     for i, name in enumerate(param_names):
-        EVENT_NAMES[str(opt["NEVT"] + i)] = PARAM_LABELS.get(name, name)
+        col = str(opt["NEVT"] + i)
+        EVENT_NAMES[col] = PARAM_LABELS.get(name, name)
+        if name in PARAM_BINNING:
+            EVENT_BINNING[col] = PARAM_BINNING[name]
+        if name in PARAM_YLIM:
+            EVENT_YLIM[col] = PARAM_YLIM[name]
 
     # ---- datasets ----
     reference_entry = utils.GetReferenceFile(manifest)
