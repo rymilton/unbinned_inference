@@ -65,7 +65,16 @@ if __name__ == "__main__":
 
 
 
-    data_files = ["pythia_H1_alphaS0.1100_eplus_1Mevents_prep.h5"]
+    data_files = ["pythia_H1_alphaS0.1000_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1100_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1200_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1300_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1400_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1600_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1700_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1800_eplus_1Mevents_prep.h5",
+                  "pythia_H1_alphaS0.1900_eplus_1Mevents_prep.h5",
+                  ]
 
     surrogate = SurrogateModel(
         version = "testing",
@@ -105,7 +114,6 @@ if __name__ == "__main__":
         param_names=surrogate.param_names,
         file_params=reference_params,
     )
-    exit()
 
     K.clear_session()
 
